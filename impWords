@@ -1,0 +1,15 @@
+ ; ~Format=ANSI.S~
+%RO Version Control
+impWords
+impWords ;import words from a word list
+    ;
+  s fnm="c:\nltk\data\corpora\words\en"
+  s dev="|FILE|"_fnm
+  s $zt="eof"
+  o dev:("R") u dev
+  f  r word q:$ZEOF  d
+  . i "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[$e(word) s ^nounProp(word)=""
+  . e  s ^word(word)=""
+eof c dev
+  q
+

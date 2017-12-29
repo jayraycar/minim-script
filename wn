@@ -1,0 +1,98 @@
+ ; ~Format=ANSI.S~
+%RO Version Control
+wn
+wn  ; routines for accessing data in the wordnet database.
+    ;
+    q
+    ;
+    ; report on parts of speach for a word
+    ;
+pos(word) n pos
+    s pos="",list=""
+    f  s pos=$o(^wnIdx(word,pos)) q:pos=""  d
+    . i list'="" s list=list_" "
+    . s list=list_pos
+    q list
+    ;
+    ; return the synset(s) for a word and part of speech.
+    ;
+synsets(word,pos)
+    q $p($g(^wnIdx(word,pos)),"|",3)
+    ;
+    ; return the lemma of a synset
+    ;
+lemma(ss,pos) n lemma,i
+    s lemma=""
+    s i=""
+    f  s i=$o(^wnDat(ss,pos,0,i)) q:i=""  d
+    . i lemma'="" s lemma=lemma_" "
+    . s lemma=lemma_$p(^wnDat(ss,pos,0,i),"|")
+    q lemma
+    ;
+    ; return hypernyms of a synset
+    ;
+hypernym(ss,pos,hypernyms)
+    m @hypernyms=^wnDat(ss,pos,1)
+    q
+    ;
+    ; return the description of a synset
+    ;
+descr(ss,pos,descr) n i
+    m @descr=^wnDat(ss,pos,2)
+    q
+    ;
+    ;
+    ; Check if word1 is a hyponym of word2, given a part of speech
+    ; Currently this only works for nouns as nouns have a defined root
+    ; that all hypernyms terminate at. (entity - synset 3-00001740)
+    ; TODO: more work required to extend this to other parts of speech
+    ; returns 1 for true
+    ;         0 for false
+    ;
+    ; Stack structure
+    ; stack(stackPtr,0)=current_list_position
+    ; stack(stackPtr,1)=list of synsets for word1 (space separate)
+    ;
+isA(pos,word1,word2) n fin,res,stack,stackPtr,ssw2,synset,i,numSS
+    s stackPtr=0
+    s res=0
+    ; get initial synset list for word1 and put into stack
+    s synset=$$synsets(word1,pos)
+    i synset="" q
+    s stack(stackPtr,1)=1
+    s numSS=$l(synset," ")
+    f i=1:1:numSS s stack(stackPtr,2,i)=$p(synset," ",i)
+    ; convert space separated list to an array for easy look up
+    s synset=$$synsets(word2,pos)
+    s numSS=$l(synset," ")
+    f i=1:1:numSS s ssw2($p(ssw2," ",i))=""
+    ; do the search (stack based)
+    s fin=0
+    f  d  q:fin
+    . s curPos=stack(stackPtr,1)
+    . s synset=$p(stack(stackPtr,2)," ",curPos)
+    . i synset="" s stackPtr=stackPtr-1
+    . i stackPtr<0 s fin=1 q
+    . ; check if we have found a synset for word2
+    . i $d(ssw2(synset)) d  q
+    . . ; match found, end of search
+    . . s fin=1
+    . . s res=1
+    . e  d
+    . . ; no match for word2 synset
+    . . ; check for top synset
+    . . i synset="3-00001740" d
+    . . . s fin=1
+    . . . s res=0
+    . . . s stackPtr=stackPtr-1
+    . . . s stack(stackPtr,1)=stack(stackPtr,1)+1
+    . . e  d
+    . . . ; haven't reached "entity" and word2 synset not found
+    . . . ; add to the stack and try the next level
+    . . . s stackPtr=stackPtr+1
+    . . . s stack(stackPtr,1)=1
+    . . . s stack(stackPtr,2)=""
+    . . . m nextUp=^wnDat(synset,pos,1)
+    q res
+ 
+

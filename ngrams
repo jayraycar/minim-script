@@ -1,0 +1,346 @@
+ ; ~Format=ANSI.S~
+%RO Version Control
+ngrams
+ngrams ; Get list of ngrams and frequencies
+    ;
+    ;
+    ;read directory list
+    ;
+    n dir,dl,fn,fnlist,fnm,line,numWords,word,i,n,gram
+    d init
+    k ^n2grams,^n3grams,^n4grams
+    s dir="/home/james/Documents/scriptures/texts/",dl=dir_"dir.list"
+    o dl:(readonly) u dl
+    s eof=0
+    f  d  q:eof
+    . r fn
+    . s eof=$ZEOF
+    . i eof q
+    . s fnlist(fn)=""
+    c dl
+    ;
+    ;read individual files
+    ;
+    s fn=""
+    f  s fn=$o(fnlist(fn)) q:fn=""  d
+    . u 0 w fn,!
+    . s fnm=dir_fn
+    . o fnm:(readonly) u fnm
+    . f  d  q:$ZEOF
+    . . r line
+    . . d split
+    . . s numWords=$l(line," ")
+    . . ;for each word
+    . . f i=1:1:numWords d
+    . . . s word=$p(line," ",i)
+    . . . i word="" q
+    . . . i $d(^stopWord(word)) q
+    . . . s word=$$stem(word)
+    . . . ; build ngram list
+    . . . f n=2:1:4 d
+    . . . . d extract(n,word)
+    . . . . ; put into database
+    . . . . s gram=""
+    . . . . f  s gram=$o(ngramList(gram)) q:gram=""  d
+    . . . . . s glbl="^n"_n_"grams"
+    . . . . . s @glbl@(gram)=$g(@glbl@(gram))+ngramList(gram)
+    . c fnm
+    q
+    ;
+    ; initialise various things
+    ;
+init ; endings used in stemming words
+    s endings="ability,ibility,"
+    s endings=endings_"ation,ivity,"
+    s endings=endings_"able,ably,ibly,ible,ness,ment,tion,"
+    s endings=endings_"age,eth,est,ily,ous,ies,ies,ing,ion,ary,ity,ify,ive,ite,"
+    s endings=endings_"ed,al,ly,e,s,y"
+    ;
+    s numEnds=$l(endings,",")
+    ;
+    s nullfm="0123456789&$*#/,:;().""[]-!?=`'"_$c(9,13,31,26)
+    s nullto="                     "
+    s upper="ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    s lower="abcdefghijklmnopqrstuvwxyz"
+    q
+    ;
+    ;split into words, change to lowercase
+    ;
+split s line=$tr(line,nullfm,nullto)
+    s line=$tr(line,upper,lower)
+    q
+    ;
+    ; stemmer - trim all last endings
+    ; don't let the stem be less than 3 characters long
+    ;
+stem(word) n wlen,elen,i,orig,changed
+    i '$d(endings) d init
+    s wlen=$l(word)
+    s orig=word
+    s changed=0
+    f  d  q:'changed
+    . s changed=0
+    . f i=1:1:numEnds d
+    . . s ending=$p(endings,",",i)
+    . . s elen=$l(ending)
+    . . i $e(word,wlen-elen+1,wlen)=ending d
+    . . . s word=$e(word,1,wlen-elen)
+    . . . i $l(word)<3 d
+    . . . . s word=word_ending ; don't let stemming go too far
+    . . . e  d
+    . . . . s changed=1
+    . . . s wlen=$l(word)
+    q word
+    ;
+    ; stemmer - only trim last ending
+    ;
+stem2(word) n wlen,elen,i,orig,changed,ending
+    i '$d(endings) d init
+    s wlen=$l(word)
+    s orig=word
+    s changed=0
+    f i=1:1:numEnds d  q:changed
+    . s ending=$p(endings,",",i)
+    . s elen=$l(ending)
+    . i $e(word,wlen-elen+1,wlen)=ending d
+    . . s word=$e(word,1,wlen-elen)
+    . . i $l(word)<3 d
+    . . . s word=word_ending ; don't let stemming go too far
+    . . s changed=1
+    . . ;s wlen=$l(word)
+    q word
+    ;
+    ; determine ngrams
+    ;
+extract(n,word) n i,gram
+    k ngramList
+    f i=1:1:$l(word)-n+1 d
+    . s gram=$e(word,i,i+n-1)
+    . s ngramList(gram)=$g(ngramList(gram))+1
+    q
+    ;
+    ; load stop words
+    ;
+stopWords n fnm,word
+    s fnm="|FILE|c:\minimDat\stoplist.txt"
+    o fnm:("rt")
+    u fnm
+    f  r word q:$zeof  d
+    . s ^stopWord(word)=""
+    c fnm
+    q
+    ;
+    ; delete any non-alpha entries
+    ;
+clean n gram,glbl,cmd
+    f n=2:1:4 d
+    . s glbl="^n"_n_"grams"
+    . s gram=""
+    . f  s gram=$o(@glbl@(gram)) q:gram=""  d
+    . . s cmd="i gram'?"_n_"A k @glbl@(gram)"
+    . . x cmd
+    q
+    ;
+    ;
+    ;
+dump n n,fnm,gram,glbl
+    f n=2:1:4 d
+    . s fnm="export/n"_n_"grams.csv"
+    . s glbl="^n"_n_"grams"
+    . o fnm:(writeonly)
+    . u fnm
+    . s gram=""
+    . f  s gram=$o(@glbl@(gram)) q:gram=""  d
+    . . w gram,",",@glbl@(gram),!
+    . c fnm
+    q
+    ;
+    ;
+    ;
+load n n,fnm,glbl,cumf
+    f n=2:1:4 d
+    . s glbl="^n"_n_"grams"
+    . s fnm="export/n"_n_"grams.csv"
+    . o fnm:(readonly)
+    . f  u fnm r line q:$zeof  d
+    . . s line=$tr(line,"""","")
+    . . s gram=$p(line,",")
+    . . i gram="" q
+    . . s cumf=$p(line,",",3)
+    . . s $p(@glbl@(gram),"|",2)=cumf
+    . c fnm
+    q
+    ;
+    ; select the ngrams to use
+    ;
+select s gram2=""
+    f  s gram2=$o(^bigrams(gram2)) q:gram2=""  d
+    . s cnt2=$p(^bigrams(gram2),"|")
+    . s cf2=$p(^bigrams(gram2),"|",2)
+    . s f2=cnt2/^bigrams
+    . s $p(^bigrams(gram2),"|",3)=f2
+    . i cf2>0.9 s ^ngrams(gram2)=cnt2 q
+    . w gram2,!
+    . s gram3=gram2
+    . f  s gram3=$o(^trigrams(gram3)) q:gram3=""!($e(gram3,1,2)'=gram2)  d
+    . . w gram3,!
+    . . s cnt3=$p(^trigrams(gram3),"|")
+    . . s cf3=$p(^trigrams(gram3),"|",2)
+    . . s f3=cnt3/^trigrams
+    . . s $p(^trigrams(gram3),"|",3)=f3
+    . . i cf3>0.9 s ^ngrams(gram3)=cnt3 q
+    . . s gram4=gram3
+    . . f  s gram4=$o(^quadgrams(gram4)) q:gram4=""!($e(gram4,1,3)'=gram3)  d
+    . . . s cnt4=$p(^quadgrams(gram4),"|")
+    . . . s f4=cnt4/^quadgrams
+    . . . s $p(^quadgrams(gram4),"|",3)=f4
+    . . . s ^ngrams(gram4)=cnt4
+    q
+    ;
+    ; select ngrams to use purely on rarity (>90%)
+    ;
+select2 n n,glbl,gram,cf,cnt,f
+    k ^ngrams
+    f n=2:1:4 d
+    . s glbl="^n"_n_"grams"
+    . s gram=""
+    . f  s gram=$o(@glbl@(gram)) q:gram=""  d
+    . . s cnt=$p(@glbl@(gram),"|")
+    . . s cf=$p(@glbl@(gram),"|",2)
+    . . s f=cnt/@glbl
+    . . s $p(@glbl@(gram),"|",3)=f
+    . . i cf>0.9 s ^ngrams(gram)=$fn(1/$$FUNC^%SQROOT(f),"",0)
+    q
+    ;
+    ; count number of entries
+    ;
+count s g="",cnt=0
+    f  s g=$o(^ngrams(g)) q:g=""  d
+    . s cnt=cnt+1
+    w cnt,!
+    q
+    ;
+    ; count all entries >90%
+    ;
+cntAll s cnt=0
+    f glbl="^bigrams","^trigrams","^quadgrams" d
+    . s gram=""
+    . f  s gram=$o(@glbl@(gram)) q:gram=""  d
+    . . i $p(@glbl@(gram),"|",2)>0.9 s cnt=cnt+1
+    w "total = ",cnt,!
+    q
+    ;
+    ; determine weighted and non-weighted ngram vector
+    ; pass as indirection variable
+    ; doc must be an array, even if just one line
+    ;
+    ; creates vector and wvector arrays
+    ;
+vector(doc) n gram,line,num,crsr,win,numWords,w,word,lastEnd,len,quit
+    k wvector,vector
+    s num=""
+    f  s num=$o(@doc@(num)) q:num=""  d
+    . s line=@doc@(num)
+    . d split
+    . s numWords=$l(line," ")
+    . f w=1:1:numWords d
+    . . s word=$p(line," ",w)
+    . . i $d(^stopWord(word)) q  ; ignore stop words
+    . . s word=$$stem(word)      ; only use the word stems
+    . . s len=$l(word)
+    . . i len<2 q
+    . . ;determine ngrams
+    . . s crsr=1,quit=0,win=3,lastEnd=0
+    . . f  d  q:quit
+    . . . i lastEnd=len s quit=1 q
+    . . . s gram=$e(word,crsr,crsr+win)
+    . . . ; check we have the right length
+    . . . i $l(gram)<(win+1) s win=$l(gram)-1
+    . . . i $d(^ngrams(gram)) d  q
+    . . . . s wvector(gram)=$g(wvector(gram))+^ngrams(gram)
+    . . . . s vector(gram)=$g(vector(gram))+1
+    . . . . s lastEnd=crsr+win
+    . . . . s crsr=crsr+1,win=3
+    . . . s win=win-1
+    . . . ; check if new window extends beyond end of words
+    . . . i crsr+win>len s win=len-crsr
+    . . . ; check if new window is entirely inside of old window
+    . . . i (crsr+win)'>lastEnd s crsr=crsr+1,win=3
+    . . . ; check if new window is < 2 characters
+    . . . i win<1 s crsr=crsr+1,win=3
+    . . . ; check if crsr is at end of words
+    . . . i crsr'<len s quit=1 q
+    q
+    ;
+    ; calculate similarity between two vectors
+    ; uses indirection so pass arrays as strings
+    ;
+sim(a,b) n gram,x,y,mat,intersect,union,suma,sumb,sim1,sim2,min,max
+    ; combine the vectors into a matrix
+    m mat=@a
+    s gram=""
+    f  s gram=$o(@b@(gram)) q:gram=""  d
+    . s $p(mat(gram),"|",2)=@b@(gram)
+    ;
+    ; calculate parameters
+    s intersect=0,union=0,suma=0,sumb=0
+    s gram=""
+    f  s gram=$o(mat(gram)) q:gram=""  d
+    . s x=$p(mat(gram),"|")
+    . s y=$p(mat(gram),"|",2)
+    . ;
+    . i x>y s max=x
+    . e  s max=y
+    . s union=union+max
+    . ;
+    . i x<y s min=x
+    . e  s min=y
+    . s intersect=intersect+min
+    . ;
+    . s suma=suma+x
+    . s sumb=sumb+y
+    ;
+    ; calculate similarity
+    s sim1=intersect/union
+    i suma<sumb s min=suma
+    e  s min=sumb
+    s sim2=intersect/min
+    q $fn(sim1,"",3)_","_$fn(sim2,"",3)
+    ;
+    ; test similarity
+    ;
+testsim d init
+    s a(1)="Peter Piper picked a peck of pickled peppers"
+    s b(1)="How many pickled peppers did Peter Piper pick?"
+    s c(1)="Pied Piper of Hamlin"
+    s d(1)="Peter Piper"
+    s e(1)="'Twas brillig, and the slithy toves did gyre and gimble in the wabe"
+    f i="a","b","c","d","e" d
+    . d vector(i)
+    . m A=vector
+    . m C=wvector
+    . f j="a","b","c","d","e" d
+    . . d vector(j)
+    . . m B=vector
+    . . m D=wvector
+    . . s res(i,j)=$$sim("A","B")
+    . . s wres(i,j)=$$sim("C","D")
+    . . k B,D
+    . k A,C
+    ;
+    ; display the results
+    f i="a","b","c","d","e" d
+    . s x=0
+    . f j="a","b","c","d","e" d
+    . . w ?(x*13),res(i,j)
+    . . s x=x+1
+    . w !
+    w !
+    f i="a","b","c","d","e" d
+    . s x=0
+    . f j="a","b","c","d","e" d
+    . . w ?(x*13),wres(i,j)
+    . . s x=x+1
+    . w !
+    q
+

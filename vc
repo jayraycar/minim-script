@@ -1,0 +1,130 @@
+ ; ~Format=ANSI.S~
+%RO Version Control
+vc
+vc  ; Interface to external version control
+    ;
+    q
+    ;
+    ; Export all routines in ^ROUTINE to version control subdirectory
+    ;
+    ; TODO: delete routine, add new routine
+    ;
+exportAll
+    w "Exporting routines for version control...",!
+    s dir=^Sys("data_dir")_$znspace_"\"
+    s rnm=""
+    f  s rnm=$o(^ROUTINE(rnm)) q:rnm=""  d
+    . w rnm,!
+    . d exportOne(dir,rnm)
+    q
+    ;
+    ; Export a specified routine to version control
+    ;
+expOne
+    w "Export a routine to version control",!,!
+    w "Routine name: "
+    r rname w !
+    i rname="" q
+    i '$d(^ROUTINE(rname)) w "Routine does not exist.",! q
+    s dir=^Sys("data_dir")_$znspace_"\"
+    d exportOne(dir,rname)
+    w "Done",!
+    q
+    ;
+    ; export just one program
+    ;
+exportOne(dir,rname,fname="") n expFnm,dev,line,s
+    i $e(dir,$l(dir))'="\" s dir=dir_"\"
+    i fname="" s expFnm=dir_rname
+    e  s expFnm=dir_fname
+    s dev="|FILE|"_expFnm o dev:("wtn"):1 e  u $p d  q
+    . w "Failed to use ",expFnm,!
+    u dev
+    w " ; ~Format=ANSI.S~",!
+    w "%RO Version Control",!
+    w rname,!
+    ; write all routines line-by-line using ANSI format
+    s line=0
+    f  s line=$o(^ROUTINE(rname,line)) q:line=""  d
+    . s s=^ROUTINE(rname,line)
+    . i s="" s s=" "
+    . w s,!
+    w ! ; end of routine
+    u $p
+    c dev
+    q
+    ;
+    ; Import all routines from the version control subdirectory
+    ;
+importAll n dir,dirDev,fname
+    w "Importing routines from version control...",!
+    s dir=^Sys("data_dir")_$znspace_"\"
+    ; get the list of files in the version control directory
+    s dirDev="|PIPE|dir /b "_dir
+    o dirDev:("rt")
+    s $et="g endDir"
+    f  u dirDev r fname  d
+    . i fname="vc" q ;skip this program as it is already imported
+    . d importOne(dir,fname)
+endDir
+    s $et=""
+    u $p
+    c dirDev
+    q
+    ;
+    ; import a routine from version control
+    ;
+importOne(dir,fname) n fullPath,list,n
+    i $e(dir,$l(dir))'="\" s dir=dir_"\"
+    s fullPath=dir_fname
+    s list=""
+    s n=$$import(fullPath,list,1,1)
+    q
+    ;
+    ; do the import of file (Modified from %RI)
+    ;
+import(fname,list,compile=1,show=0)
+    n dev="|FILE|"_fname,io=$io,line,n,size,rname,cnt=0,tmp
+    o dev:("rte"):1 e  q 0
+    n $et="g endImport"
+    u dev
+    r line,line
+    f  r rname q:rname=""  d  q:line=""
+    . i show u $p w "Load ",rname,"... " u dev
+    . k ^rOBJ(rname),^$R(rname)
+    . s n=0,size=0
+    . f  r line q:line=""  s ^ROUTINE(rname,$i(n))=line,size=size+$l(line)
+    . s ^ROUTINE(rname)=n_","_size
+    . s ^ROUTINE(rname,0)=$h
+    . i compile d
+    . . u $p w:show "compile ",rname,"... " s tmp=$v("rou","c",rname)
+    . . w:(tmp=0&show) "success",!
+    . . u dev
+    . s list(rname)="",cnt=cnt+1
+endImport
+    u $p c dev
+    q cnt
+    ;
+    ; compare ^ROUTINE() code with code in version control subdirectory
+    ; using winMerge or other comparison program
+    ;
+compare n rname,cfProg,dir,new,ret,file1,file2,cmd
+    s dir=^Sys("temp_dir")
+    w "Program name: "
+    r rname w !
+    i rname="" q
+    i '$d(^ROUTINE(rname)) w "Routine does not exist!",! q
+    s cfProg=^Sys("compare_program")
+    ; export ^ROUTINE() to temporary file
+    s file1=$j_"-"_rname
+    d exportOne(dir,rname,file1)
+    ; run external merge program, don't wait for it to finish,
+    ; don't do any clean up later.
+    ; TODO: Look at importing any merged changes somehow.
+    s file1=dir_file1
+    s file2=^Sys("data_dir")_$znspace_"\"_rname
+    s cmd=cfProg_" "_file1_" "_file2
+    s ret=$v("file",20,cmd,"s","")
+    q
+ 
+

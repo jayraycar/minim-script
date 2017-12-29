@@ -1,0 +1,412 @@
+ ; ~Format=ANSI.S~
+%RO Version Control
+libW
+LibW ; library of word manipulation programs
+    q
+    ;
+    ; sort letters in a word alphabetically
+    ; 14/8/2010
+    ;
+sortL(word) n i,len,temp,fin,swapped
+    s len=$l(word)
+    i len=0 q ""
+    s fin=0
+    f  d  q:fin
+    . s swapped=0
+    . f i=1:1:len-1 d
+    . . i $e(word,i)]$e(word,i+1) d
+    . . . s temp=$e(word,i)
+    . . . s $e(word,i)=$e(word,i+1)
+    . . . s $e(word,i+1)=temp
+    . . . s swapped=1
+    . i 'swapped s fin=1
+    q word
+    ;
+    ;Calculate a similarity index of two strings based on digram occurences
+    ;Jim Carthew 15Aug1996
+    ;  create list of pairs of letters in a string
+    ;  compare the two lists using set theory
+    ;  
+    ;  returns %SIM value
+    ;  creates:
+    ;     %SIM - intersection / union
+    ;     %DICE - Dice's coefficient
+    ;
+digram(str1,str2) n dilist,pair,sum1,sum2,union,isect,i,%lower,%upper
+    i str1=""!(str2="") q 0
+    ;convert letters to upper case
+    s %lower="abcdefghijklmnopqrstuvwxyz",%upper="ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    s str1=$tr(str1,%lower,%upper),str2=$tr(str2,%lower,%upper)
+    ;
+    ;build digram list for str1
+    ;
+    s i=1
+    f i=1:1:$l(str1)-1 d
+    . s pair=$e(str1,i,i+1)
+    . s dilist(pair,1)=$g(dilist(pair,1))+1
+    ;
+    ;build digram list for str2
+    ;
+    s i=1
+    f i=1:1:$l(str2)-1 d
+    . s pair=$e(str2,i,i+1)
+    . s dilist(pair,2)=$g(dilist(pair,2))+1
+    ;
+    ;calculate similarity index
+    ;
+    s pair="",(sum1,sum2,isect,union)=0
+    f  s pair=$o(dilist(pair)) q:pair=""  d
+    . s sum1=sum1+$g(dilist(pair,1))
+    . s sum2=sum2+$g(dilist(pair,2))
+    . i $g(dilist(pair,1))'<$g(dilist(pair,2)) s union=union+dilist(pair,1)
+    . e  s union=union+$g(dilist(pair,2))
+    . i $g(dilist(pair,1))'>$g(dilist(pair,2)) s isect=isect+$g(dilist(pair,1))
+    . e  s isect=isect+$g(dilist(pair,2))
+    s %sim=isect/union
+    s %dice=2*isect/(sum1+sum2)
+    ;
+    i $d(debug) d
+    . s pair=""
+    . f  s pair=$o(dilist(pair)) q:pair=""  d
+    . . w pair,?4,$g(dilist(pair,1)),?8,$g(dilist(pair,2)),!
+    . w !
+    . w "sum 1 = ",sum1,!,"sum 2 = ",sum2,!,"union = ",union,!
+    . w "intersection = ",isect,!,"similarity = ",$fn(%sim,"",3),!
+    . w "dice coefficient = ",$fn(%dice,"",3),!
+    q %sim
+    ;
+    ; Unigram comparison
+    ; 14/8/2010
+    ; 
+unigram(s1,s2) n list,ch,sum1,sum2,union,isect,i,%lower,%upper
+    i s1=""!(s2="") q 0
+    ;convert letters to upper case
+    s %lower="abcdefghijklmnopqrstuvwxyz"
+    s %upper="ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    s s1=$tr(s1,%lower,%upper),s2=$tr(s2,%lower,%upper)
+    ;build list
+    f i=1:1:$l(s1) d
+    . s ch=$e(s1,i)
+    . s list(ch,1)=$g(list(ch,1))+1
+    f i=1:1:$l(s2) d
+    . s ch=$e(s2,i)
+    . s list(ch,2)=$g(list(ch,2))+1
+    ; calculate similarity index
+    s ch="",(sum1,sum2,isect,union)=0
+    f  s ch=$o(list(ch)) q:ch=""  d
+    . s sum1=sum1+$g(list(ch,1))
+    . s sum2=sum2+$g(list(ch,2))
+    . i $g(list(ch,1))'<$g(list(ch,2)) s union=union+list(ch,1)
+    . e  s union=union+$g(list(ch,2))
+    . i $g(list(ch,1))'>$g(list(ch,2)) s isect=isect+$g(list(ch,1))
+    . e  s isect=isect+$g(list(ch,2))
+    s %sim=isect/union
+    s %dice=2*isect/(sum1+sum2)
+    ;
+    i $d(debug) d
+    . s ch=""
+    . f  s ch=$o(list(ch)) q:ch=""  d
+    . . w ch,?4,$g(list(ch,1)),?8,$g(list(ch,2)),!
+    . w !
+    . w "sum 1 = ",sum1,!,"sum 2 = ",sum2,!,"union = ",union,!
+    . w "intersection = ",isect,!,"similarity = ",$fn(%sim,"",3),!
+    . w "dice coefficient = ",$fn(%dice,"",3),!
+    q %sim
+    ;
+    ; Levenshtein distance
+    ; 14/8/2010
+    ; 
+lev(w1,w2) n lenw1,lenw2,i,j,d,m,%lower,%upper,maxlen
+    s lenw1=$l(w1),lenw2=$l(w2)
+    i lenw1>lenw2 s maxlen=lenw1
+    e  s maxlen=lenw2
+    s %lower="abcdefghijklmnopqrstuvwxyz"
+    s %upper="ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    s w1=$tr(w1,%lower,%upper),w2=$tr(w2,%lower,%upper)
+    f i=0:1:lenw1 s d(i,0)=i  ; deletion
+    f j=0:1:lenw2 s d(0,j)=j  ; insertion
+    f j=1:1:lenw2 d
+    . f i=1:1:lenw1 d
+    . . i $e(w1,i)=$e(w2,j) d
+    . . . s d(i,j)=d(i-1,j-1)
+    . . e  d
+    . . . k m
+    . . . s m(d(i-1,j)+1)=""   ; deletion
+    . . . s m(d(i,j-1)+1)=""   ; insertion
+    . . . s m(d(i-1,j-1)+1)="" ; substitution
+    . . . s d(i,j)=$o(m(""))   ; minimum of the three values
+    i $d(debug) d
+    . w "Distance: ",d(lenw1,lenw2),!
+    . w "Max Distance: ",maxlen,!
+    q $fn(1-(d(lenw1,lenw2)/maxlen),"",3)
+    ;
+    ; find closest word match to a string
+    ; 
+wmatch(s,max) n w,score
+    s w="",best=0
+    f  s w=$o(^xref(w)) q:w=""  d
+    . i $l(w)>max q
+    . s score=$$unigram(s,w)
+    . i score>best d
+    . . k wlist
+    . . s wlist(w)=""
+    . . s best=score
+    . i score=best s wlist(w)=""
+    q
+    ;
+    ; Metaphone algorithm
+    ;
+    ;The Metaphone Rules
+    ;Metaphone reduces the alphabet to 16 consonant sounds:
+    ;B X S K J T F H L M N P R 0 W Y
+    ;That isn't an O but a zero - representing the 'th' sound.
+    ;Transformations
+    ;
+    ;Metaphone uses the following transformation rules:
+    ;Doubled letters except "c" -> drop 2nd letter. Vowels are only 
+    ;kept when they are the first letter.
+    ;
+    ;B -> P   unless at the end of a word after "m" as in "dumb"
+    ;C -> X   (sh) if -cia- or -ch-
+    ;     S   if -ci-, -ce- or -cy-
+    ;     K   otherwise, including -sch-
+    ;D -> J   if in -dge-, -dgy- or -dgi-
+    ;     T   otherwise
+    ;F -> F
+    ;G ->     silent if in -gh- and not at end or before a vowel
+    ;         in -gn- or -gned- (also see dge etc. above)
+    ;     F   if in -gh and at end
+    ;     J   if before i or e or y if not double gg
+    ;     K   otherwise
+    ;H ->     silent if after vowel and no vowel follows
+    ;     H   otherwise
+    ;J -> J
+    ;K ->     silent if after "c"
+    ;     K   otherwise
+    ;L -> L   
+    ;M -> M
+    ;N -> N   including -ng-
+    ;P -> F   if before "h"
+    ;     P   otherwise
+    ;Q -> K
+    ;R -> R
+    ;         if followed by "D"
+    ;S -> X   (sh) if before "h" or in -sio- or -sia-
+    ;     S   otherwise
+    ;T -> X   (sh) if -tia- or -tio-
+    ;     0   (th) if before "h"
+    ;         silent if in -tch-
+    ;     T   otherwise
+    ;V -> F
+    ;W ->     silent if not followed by a vowel
+    ;     W   if followed by a vowel
+    ;X -> KS
+    ;Y -> Y   if the first character
+    ;         if other than the first character (ie, treat as a vowel)
+    ;Z -> S 
+    ;
+    ;Initial Letter Exceptions
+    ;
+    ;Initial  kn-, gn- pn, ae- or wr-      -> drop first letter
+    ;Initial  x-                           -> change to "s"
+    ;Initial  wh-                          -> change to "w"
+    ;Initial  zh-                          -> change to "j"
+    ;
+    ;The code is truncated at 4 characters in this example, but more 
+    ;could be used.
+    ;Lawrence Philips, "Hanging on the Metaphone", Computer Language 
+    ;v7 n12, December 1990, pp39-43.
+    ;
+mphone(s1) n %lower,%upper,%value,len,i,out,ch,%vowel,start
+    s %lower="abcdefghijklmnopqrstuvwxyz"
+    s %upper="ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    s %vowel="AEIOU"
+    s s1=$tr(s1,%lower,%upper)
+    s start=1,out=""
+    i %vowel[$e(s1,1) s out="A",start=2 ;mark a vowel not to be removed later
+    e  i $e(s1,1,2)="KN" s out="N",start=3
+    e  i $e(s1,1,2)="GN" s out="N",start=3
+    e  i $e(s1,1,2)="PN" s out="N",start=3
+    e  i $e(s1,1,2)="AE" s out="E",start=3
+    e  i $e(s1,1,2)="WR" s out="R",start=3
+    e  i $e(s1,1,2)="WH" s out="W",start=3
+    e  i $e(s1,1,2)="GH" s out="J",start=3
+    e  i $e(s1,1)="X" s out="S",start=2
+    s len=$l(s1),vowelPre=0
+    ; do translation
+    f i=start:1 d  q:i>len
+    . s ch=$e(s1,i)
+    . i %vowel[ch s ch="E"  ;mark a vowel to remove later
+    . e  i %upper'[ch s ch=""  ;remove non-alphas
+    . e  i ch="B" d
+    . . s ch="P"
+    . . i $e(s1,i-1)="M",i=len s ch=""
+    . e  i ch="C" d
+    . . s ch="K"
+    . . i $e(s1,i,i+2)="CIA" s ch="X",i=i+2
+    . . e  i $e(s1,i+1)="H" s ch="X",i=i+1
+    . . e  i $e(s1,i+1)="Z" s ch="X",i=i+1
+    . . e  i $e(s1,i+1)="I" s ch="S",i=i+1
+    . . e  i $e(s1,i+1)="E" s ch="S",i=i+1
+    . . e  i $e(s1,i+1)="Y" s ch="S",i=i+1
+    . . e  i $e(s1,i,i+2)="CCI" s ch="KS",i=i+2
+    . . e  i $e(s1,i,i+2)="CCE" s ch="KS",i=i+2
+    . . e  i $e(s1,i,i+2)="CCH" s ch="K",i=i+2
+    . e  i ch="D" d
+    . . s ch="T"
+    . . i $e(s1,i,i+2)="DGE" s ch="J",i=i+2
+    . . e  i $e(s1,i,i+2)="DGY" s ch="J",i=i+2
+    . . e  i $e(s1,i,i+2)="DGI" s ch="J",i=i+2
+    . . e  i $e(s1,i+1)="T" s ch="",i=i+1
+    . . e  i $e(s1,i+1)="H" s i=i+1
+    . e  i ch="G" d
+    . . s ch="K"
+    . . i $e(s1,i+1)="H" d
+    . . . s ch="",i=i+1
+    . . ;. i i+1<len,%vowel'[$e(s1,i+2) s ch="",i=i+2
+    . . ;. i i+1=len s ch="F",i=i+1
+    . . e  i $e(s1,i+1)="N",i=(len-1) s ch=""
+    . . e  i $e(s1,i+1)="N",i<(len-1) s ch="K"
+    . . e  i $e(s1,i,i+3)="GNED" s ch=""
+    . . e  i "IEY"[$e(s1,i+1),$e(s1,i-1)'="G" s ch="J",i=i+1
+    . e  i ch="H" d
+    . . i %vowel[$e(s1,i-1),(%vowel'[$e(s1,i+1))!(i+1>len) s ch=""
+    . . e  i $e(s1,i-1)="R" s ch=""
+    . . e  i $e(s1,i-1)="L" s ch=""
+    . . e  i $e(s1,i-1)="G" s ch=""
+    . . e  i $e(s1,i-1)="N" s ch=""
+    . . ;e  i $e(s1,i-1)="Z" s ch=""
+    . e  i ch="K" d
+    . . i $e(s1,i-1)="C" s ch=""
+    . e  i ch="N",$e(s1,i+1)="G" s i=i+1
+    . e  i ch="P",($e(s1,i+1))="H" s ch="F",i=i+1
+    . e  i ch="R",$e(s1,i+1)="D" s ch=""
+    . e  i ch="Q" s ch="K"
+    . e  i ch="S" d
+    . . i $e(s1,i+1)="H" s ch="X",i=i+1
+    . . e  i $e(s1,i,i+2)="SIO" s ch="X",i=i+2
+    . . e  i $e(s1,i,i+2)="SIA" s ch="X",i=i+2
+    . . e  i $e(s1,i,i+2)="SCH" s ch="X",i=i+2
+    . . e  i $e(s1,i-1)="I",$e(s1,i+1)="L" s ch=""
+    . . e  i $e(s1,i-1)="Y",$e(s1,i+1)="L" s ch=""
+    . e  i ch="T" d
+    . . i $e(s1,i,i+2)="TIA" s ch="X",i=i+2
+    . . e  i $e(s1,i,i+2)="TIO" s ch="X",i=i+2
+    . . e  i $e(s1,i+1)="H" s ch="0",i=i+1
+    . . e  i $e(s1,i,i+2)="TCH" s ch="X",i=i+2
+    . e  i ch="V" s ch="F"
+    . e  i ch="W",((%vowel_"Y")'[$e(s1,i+1))!(i+1>len) s ch=""
+    . e  i ch="X" s ch="KS"
+    . e  i ch="Y",i>start s ch=""
+    . e  i ch="Z" d
+    . . s ch="S"
+    . . i $e(s1,i+1)="H" s ch="J",i=i+1
+    . i $e(out,$l(out))=ch s ch="" ;remove double characters
+    . s out=out_ch
+    s out=$tr(out,"E","") ;remove vowels
+    q $e(out,1,4)
+    ;
+    ; Test metaphone algorithm
+    ; 
+testMphone s w="",fail=0,tested=0,quit=0
+    f  s w=$o(^mPhone(w)) q:w=""  d  q:quit
+    . s tested=tested+1
+    . s code=$$mphone(w)
+    . i code'=^mPhone(w) d
+    . . w w," expected ",^mPhone(w)," got ",code,".  Correct (y/n)? "
+    . . r ans w !
+    . . i ans'="","Yy"[ans s ^mPhone(w)=code
+    . . i ans="*" s quit=1 q
+    . . s fail=fail+1
+    w "Failed = ",fail," out of ",tested,!
+    q
+    ;
+    ; Soundex algorithm
+    ; The correct value can be found as follows:
+    ;
+    ;   1. If "h", "w" separate two consonants with the same soundex 
+    ;      code, change consonants to right of the vowel into "h" until 
+    ;      they have the same soundex code
+    ;   2. Replace consonants with digits as follows (but do not change 
+    ;   the first letter):
+    ;          * b, f, p, v => 1
+    ;          * c, g, j, k, q, s, x, z => 2
+    ;          * d, t => 3
+    ;          * l => 4
+    ;          * m, n => 5
+    ;          * r => 6
+    ;   3. Collapse adjacent identical digits into a single digit of that
+    ;      value.
+    ;   4. Remove all non-digits after the first letter.
+    ;   5. Return the starting letter and the first three remaining 
+    ;      digits. If needed, append zeroes to make it a letter and three 
+    ;      digits.
+    ;
+    ;Using this algorithm, both "Robert" and "Rupert" return the same 
+    ;string "R163" while "Rubin" yields "R150". "Ashcraft" yields "A261".
+    ;
+sndx(s1) n %lower,%upper,%value,len,i,out
+    s %lower="abcdefghijklmnopqrstuvwxyz"
+    s %upper="ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    s %value="01230120022455012623010202"
+    i $g(s1)="" q "Z000"
+    s len=$l(s1)
+    s s1=$tr(s1,%lower,%upper)
+    s out=$e(s1,1)  ;keep first letter
+    s s1=$e(s1,2,len)  ;translate remaining letters
+    s s1=$tr(s1,%upper,%value)
+    s s1=$tr(s1,"0","")  ;remove 0's
+    ; remove double characters
+    f i=1:1:len-1 i $e(s1,i)'=$e(s1,i-1) s out=out_$e(s1,i)
+    s out=$e(out,1,4)
+    s out=out_$e("0000",1,4-$l(out))
+    q out
+    ;
+    ; Extract words from supplied text
+    ; 20Aug2010
+    ;
+    ; Submit text in an array. Pass the array name.  Indirection is
+    ; used to access it.  Therefore it can be a memory array or a global.
+    ;
+    ; No attempt is made to adjust for upper and lower case letters.
+    ;
+    ; Returns a list of words found and their frequencies
+    ; in the array wordsFnd
+    ;
+    ;
+textWordExtr(%text) n eos,eosTR,remove,removeTR,ln,sent,nextSent,w,word
+    n line,numWords,s,numSent
+    s remove=",""'`()[]<>=+"_$c(26),removeTR="             "
+    s eos=";:?!-",eosTR="....."
+    k wordsFnd
+    s ln="",sent="",nextSent=""
+    f  s ln=$o(@%text@(ln)) q:ln=""  d
+    . ; get line of text, convert all punctuation marks to spaces
+    . s line=$tr(@%text@(ln),remove,removeTR)
+    . i line="" q  ; skip blank lines
+    . s line=$tr(line,eos,eosTR)
+    . i line'["." s sent=sent_line q  ;not a complete sentence
+    . s numSent=$l(line,".")
+    . f s=1:1:numSent-1 d
+    . . s sent=$$strip($p(line,".",s))
+    . . ; get the words and count them
+    . . s numWords=$l(sent," ")
+    . . f w=1:1:numWords s word=$p(sent," ",w) d
+    . . . i word="" q  ;skip double spaces
+    . . . i w=1 s word=$zlcase(word)  ;change first word to all lowercase
+    . . . s wordsFnd(word)=$g(wordsFnd(word))+1
+    . s sent=$p(line,".",numSent)  ; pickup partial last sentence
+    q
+    ;
+    ; strip leading and trailing unwanted characters
+    ;
+strip(s) n left,right,len,unwanted
+    i s="" q ""
+    s unwanted=" "_$c(9,10,13)
+    s len=$l(s)
+    f left=1:1:len i unwanted'[$e(s,left) q
+    f right=len:-1:1 i unwanted'[$e(s,right) q
+    s s=$e(s,1,right)
+    s s=$e(s,left,len)
+    q s
+

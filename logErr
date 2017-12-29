@@ -1,0 +1,280 @@
+ ; ~Format=ANSI.S~
+%RO Version Control
+logErr
+logErr ; log errors caught using $ET
+    ; 14/5/2011
+    ;
+    ; save variables
+save n %ed,%contxt,%lvl,%today,%next,%dev
+    ;i $p($ze,":")="<INTERRUPT> " s $et="" q
+    s $et=""
+    ; save local variables
+    k ^errTemp($j)
+    s %dev="|STORE|"_$na(^errTemp($j,""))
+    o %dev u %dev w  u $p c %dev
+    ; save system variables
+    s %ed("$zerror")=$ze,%ed("$ecode")=$ec,%ed("$estack")=$es
+    s %ed("$device")=$d,%ed("$horolog")=$h
+    s %ed("$io")=$io,%ed("$job")=$j,%ed("$key")=$k,%ed("$principle")=$p
+    s %ed("$quit")=$q,%ed("$reference")=$r,%ed("$stack")=$ST
+    s %ed("$storage")=$s,%ed("$system")=$sy,%ed("$test")=$t
+    s %ed("$tlevel")=$tl,%ed("$x")=$x,%ed("$y")=$y
+    s %ed("$zchild")=$zchild,%ed("$zeof")=$zeof,%ed("$zhorolog")=$ZH
+    s %ed("$zname")=$zname,%ed("$znspace")=$znspace
+    s %ed("$zparent")=$zparent,%ed("$zreference")=$zreference
+    s %ed("$ztimestamp")=$zts,%ed("$ztimezone")=$ztz,%ed("$ztrap")=$zt
+    s %ed("$zversion")=$zv
+    ;s %ed("$view(""err"",1)")=$view("err",1)
+    ;TODO: s %err2=$view("err",2,code)
+    ; get ^$DEVICE() info
+    s %contxt=""
+    f  s %contxt=$o(^$D(%contxt)) q:%contxt=""  s %ed("^$device",%contxt)=$d(^$D(%contxt))
+    ; get $STACK() info
+    s %lvl=""
+    f %lvl=0:1:$ST d
+    . s %ed("$stack",%lvl)=$st(%lvl)
+    . f %contxt="PLACE","MCODE","ECODE" s %ed("$stack",%lvl)=%ed("$stack",%lvl)_"\"_$st(%lvl,%contxt)
+    ; add local variables to %ed
+    m %ed("vars")=^errTemp($j)
+    k ^errTemp($j)
+    s %today=$p($h,",")
+    l +^errLog
+    s %next=$o(^errLog(%today,""),-1)+1
+    m ^errLog(%today,%next)=%ed
+    l -^errLog
+    q:$q ""  q
+    ;
+    ; test code for testing this program
+    ;
+test s $et="g save"
+    s $ec=""
+    s a="abcd"
+    s y(1)="car"
+    s y(2)="fridge"
+    s x=1/0
+    q
+    ;
+    ; web interface to viewing the error log
+    ;
+    ; show a list of days in the error log
+wListDays ;i '$$session^httpd() q
+    s %tmpl="nomenu.tmpl"
+    d addt^html("Error List - Days with Errors")
+    s day=""
+    f  s day=$o(^errLog(day)) q:day=""  d
+    . ;s %DT=day d %CDS^%H s date=$p(%DAT,"/",2)_"/"_$p(%DAT,"/")_"/"_$p(%DAT,"/",3)
+    . s date=$ZD(day,2)
+    . s link="<a href='errorLog/listErrors?date="_day_"'>"_date_"</a><br />"
+    . d addc^html(link)
+    q
+mwaListDays ;i '$$session^httpd() q
+    ;s %tmpl="nomenu.tmpl"
+    w "<h2>Error List - Days with Errors</h2>",!
+    s day=""
+    f  s day=$o(^errLog(day)) q:day=""  d
+    . ;s %DT=day d %CDS^%H s date=$p(%DAT,"/",2)_"/"_$p(%DAT,"/")_"/"_$p(%DAT,"/",3)
+    . s date=$ZD(day,2)
+    . w "<a href='listErrors.mwa?date="_day_"'>"_date_"</a><br />",!
+    q
+    ;
+    ; show a list of errors for a day
+    ;
+wListErrors ;i '$$session^httpd() q
+    s %tmpl="nomenu.tmpl"
+    ;s %DT=%data("date") d %CDS^%H
+    ;s date=%DAT
+    s date=$ZD(%data("date"),2)
+    d addt^html("Error List - "_date)
+    d addc^html("<table border>")
+    d addc^html("<tr><th>Number</th><th><center>$ZERROR<center></th></tr>")
+    s error=""
+    f  s error=$o(^errLog(%data("date"),error),-1) q:error=""  d
+    . ;s %TM=$p(^err(%data("date"),error),",",2)
+    . ;d %CTS^%H
+    . s %TIM=$ZTIME($p(^errLog(%data("date"),error,"$horolog"),",",2),1)
+    . d addc^html("<tr><td>")
+    . d addc^html("<a href='showError?date="_%data("date")_"&error="_error_"'>"_error_"</a> ")
+    . d addc^html(%TIM)
+    . d addc^html("</td>")
+    . d addc^html("<td>")
+    . d formZE(^errLog(%data("date"),error,"$zerror"))
+    . d addc^html("</td></tr>")
+    d addc^html("</table>")
+    q
+    ;
+    ; show a list of errors for a day
+    ;
+mwaListErrors ;i '$$session^httpd() q
+    ;s %DT=%data("date") d %CDS^%H
+    ;s date=%DAT
+    s date=$g(%KEY("date",1,1))
+    s extDate=$ZD(date,2)
+    w "Error List - "_extDate,!
+    w "<table border>",!
+    w "<tr><th>Number</th><th>Time</th><th><center>$ZERROR<center></th></tr>",!
+    s error=""
+    f  s error=$o(^errLog(date,error),-1) q:error=""  d
+    . ;s %TM=$p(^err(%data("date"),error),",",2)
+    . ;d %CTS^%H
+    . s %TIM=$ZTIME($p(^errLog(date,error,"$horolog"),",",2),1)
+    . w "<tr><td>",!
+    . w "<a href='showError.mwa?date="_date_"&error="_error_"'>"_error_"</a> "
+    . w "</td><td>"
+    . w %TIM
+    . w "</td>"
+    . w "<td>"
+    . ;d formZE(^errLog(%data("date"),error,"$zerror"))
+    . s zerror=$g(^errLog(date,error,"$zerror"))
+    . w "<table>",!
+    . w "<tr><td class='prompt'>Error:</td><td>"_$$escape^html($p(zerror,":"))_"</td></tr>",!
+    . w "<tr><td class='prompt'>Line:</td><td>"_$p(zerror,":",2)_"</td></tr>",!
+    . w "<tr><td class='prompt'>Data:</td><td>"_$p(zerror,":",3)_"</td></tr>",!
+    . w "</table>",!
+    . w "</td></tr>",!
+    . w "</table>",!
+    q
+    ;
+    ; format $ZERROR for output
+    ;
+formZE(zerror) n i,errNum,line,code,descr
+    d addc^html("<table>")
+    d addc^html("<tr><td class='prompt'>Error:</td><td>"_$$escape^html($p(zerror,":"))_"</td></tr>")
+    d addc^html("<tr><td class='prompt'>Line:</td><td>"_$p(zerror,":",2)_"</td></tr>")
+    d addc^html("<tr><td class='prompt'>Data:</td><td>"_$p(zerror,":",3)_"</td></tr>")
+    d addc^html("</table>")
+    q
+    ;
+    ; show a specific error
+    ;
+wShowError ;i '$$session^httpd() q
+    s %tmpl="nomenu.tmpl"
+    ;s %DT=%data("date") d %CDS^%H
+    ;s date=%DAT
+    s date=$ZD(%data("date"),2)
+    d addt^html("Error - "_date_", number "_%data("error"))
+    ;show the error
+    d formZE(^errLog(%data("date"),%data("error"),"$zerror"))
+    ;
+    ;show execution stack trace
+    d addc^html("<h2>Execution stack trace</h2>")
+    d addc^html("<table border><tr><th>Level</th><th>Event</th><th>Program line</th><th>Branch</th><th>Unknown</th></tr>")
+    s i=""
+    f  s i=$o(^errLog(%data("date"),%data("error"),"$stack",i)) q:i=""  d
+    . d addc^html("<tr>")
+    . d addc^html("<td>"_i_"</td>")
+    . s stackData=^errLog(%data("date"),%data("error"),"$stack",i)
+    . d addc^html("<td>"_$p(stackData,"\")_"</td>")
+    . d addc^html("<td>"_$p(stackData,"\",2)_"</td>")
+    . d addc^html("<td>"_$p(stackData,"\",3)_"</td>")
+    . d addc^html("<td>"_$p(stackData,"\",4)_"</td>")
+    . d addc^html("</tr>")
+    d addc^html("</table>")
+    ;
+    ;show variables at the time of the error trap
+    ;d addc^html("<h2>Variables at the time of the error</h2>")
+    ;s i=""
+    ;f  s i=$o(^err(%data("date"),%data("error"),"V",i)) q:i=""  d
+    ;. d addc^html($$escape^html(^err(%data("date"),%data("error"),"V",i))_"<br />")
+    ;
+    ;show the intrinsic variables
+    d addc^html("<hr />")
+    d addc^html("<h2>Intrinsic variables at the time of the error</h2>")
+    d addc^html("<table border><tr><th>Variable</th><th>Value</th></tr>")
+    s i=""
+    f  s i=$o(^errLog(%data("date"),%data("error"),i)) q:i=""  d
+    . i $d(^errLog(%data("date"),%data("error"),i))=1 d
+    . . d addc^html("<tr>")
+    . . d addc^html("<td>"_i_"</td>")
+    . . d addc^html("<td>"_$$escape^html(^errLog(%data("date"),%data("error"),i))_"</td>")
+    . . d addc^html("</tr>")
+    d addc^html("</table>")
+    d addc^html("<hr />")
+    ;
+    ;show device information
+    d addc^html("<h2>Device information</h2>")
+    s i=""
+    f  s i=$o(^errLog(%data("date"),%data("error"),"^$device",i)) q:i=""  d
+    . d addc^html(i_" = "_$$escape^html(^errLog(%data("date"),%data("error"),"^$device",i))_"<br />")
+    d addc^html("<hr />")
+    ;
+    ;show variables at each stack level
+    ;d addc^html("<h2>Variables at different stack levels</h2>")
+    ;s level=""
+    ;f  s level=$o(^err(%data("date"),%data("error"),"S",level)) q:level=""  d
+    ;. d addc^html("<h3>"_^err(%data("date"),%data("error"),"S",level)_"</h3>")
+    ;. s i=""
+    ;. f  s i=$o(^err(%data("date"),%data("error"),"VL",level,"V",i)) q:i=""  d
+    ;. . d addc^html($$escape^html(^err(%data("date"),%data("error"),"VL",level,"V",i))_"<br />")
+    ;. d addc^html("<hr />")
+    q
+mwaShowError ;i '$$session^httpd() q
+    ;s %tmpl="nomenu.tmpl"
+    ;s %DT=%data("date") d %CDS^%H
+    ;s date=%DAT
+    s date=$g(%KEY("date",1,1))
+    s error=$g(%KEY("error",1,1))
+    s extDate=$ZD(date,2)
+    w "<h2>Error - "_extDate_", number "_error_"</h2>",!
+    ;show the error
+    ;d formZE(^errLog(%data("date"),%data("error"),"$zerror"))
+    s zerror=$g(^errLog(date,error,"$zerror"))
+    w "<table>",!
+    w "<tr><td class='prompt'>Error:</td><td>"_$$escape^html($p(zerror,":"))_"</td></tr>",!
+    w "<tr><td class='prompt'>Line:</td><td>"_$p(zerror,":",2)_"</td></tr>",!
+    w "<tr><td class='prompt'>Data:</td><td>"_$p(zerror,":",3)_"</td></tr>",!
+    w "</table>",!
+    ;
+    ;show execution stack trace
+    w "<h2>Execution stack trace</h2>",!
+    w "<table border><tr><th>Level</th><th>Event</th><th>Program line</th><th>Branch</th><th>Unknown</th></tr>",!
+    s i=""
+    f  s i=$o(^errLog(date,error,"$stack",i)) q:i=""  d
+    . w "<tr>"
+    . w "<td>"_i_"</td>"
+    . s stackData=^errLog(date,error,"$stack",i)
+    . w "<td>"_$p(stackData,"\")_"</td>"
+    . w "<td>"_$p(stackData,"\",2)_"</td>"
+    . w "<td>"_$p(stackData,"\",3)_"</td>"
+    . w "<td>"_$p(stackData,"\",4)_"</td>"
+    . w "</tr>",!
+    w "</table>",!
+    ;
+    ;show variables at the time of the error trap
+    ;d addc^html("<h2>Variables at the time of the error</h2>")
+    ;s i=""
+    ;f  s i=$o(^err(%data("date"),%data("error"),"V",i)) q:i=""  d
+    ;. d addc^html($$escape^html(^err(%data("date"),%data("error"),"V",i))_"<br />")
+    ;
+    ;show the intrinsic variables
+    w "<hr />",!
+    w "<h2>Intrinsic variables at the time of the error</h2>",!
+    w "<table border><tr><th>Variable</th><th>Value</th></tr>",!
+    s i=""
+    f  s i=$o(^errLog(date,error,i)) q:i=""  d
+    . i $d(^errLog(date,error,i))=1 d
+    . . w "<tr>"
+    . . w "<td>"_i_"</td>"
+    . . w "<td>"_$$escape^html(^errLog(date,error,i))_"</td>"
+    . . w "</tr>",!
+    w "</table>",!
+    w "<hr />",!
+    ;
+    ;show device information
+    w "<h2>Device information</h2>",!
+    s i=""
+    f  s i=$o(^errLog(date,error,"^$device",i)) q:i=""  d
+    . w i_" = "_$$escape^html(^errLog(date,error,"^$device",i))_"<br />",!
+    w "<hr />",!
+    ;
+    ;show variables at each stack level
+    ;d addc^html("<h2>Variables at different stack levels</h2>")
+    ;s level=""
+    ;f  s level=$o(^err(%data("date"),%data("error"),"S",level)) q:level=""  d
+    ;. d addc^html("<h3>"_^err(%data("date"),%data("error"),"S",level)_"</h3>")
+    ;. s i=""
+    ;. f  s i=$o(^err(%data("date"),%data("error"),"VL",level,"V",i)) q:i=""  d
+    ;. . d addc^html($$escape^html(^err(%data("date"),%data("error"),"VL",level,"V",i))_"<br />")
+    ;. d addc^html("<hr />")
+    q
+ 
+

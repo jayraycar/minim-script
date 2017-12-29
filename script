@@ -1,0 +1,415 @@
+ ; ~Format=ANSI.S~
+%RO Version Control
+script
+script ; import scriptures into a database
+    ;
+    ; James Carthew 15/11/2011
+    ;
+    q
+    ;
+    ; break into lines with specified maximum characters
+    ; creates array "wrapped"
+    ;
+wordWrap(line) n quit,i,col
+    k wrapped
+    s quit=0,i=1
+    f  d  q:quit
+    . i $l(line)<80 s wrapped(i)=line,quit=1 q
+    . f col=80:-1:1 i $e(line,col)=" " q
+    . i col=1 d
+    . .  s wrapped(i)=line
+    . .  s quit=1
+    . e  d
+    . . s wrapped(i)=$e(line,1,col)
+    . . s line=$e(line,col+1,$l(line))
+    . . s i=i+1
+    q
+    ;
+    ; get directory listing
+    ;
+getDirList(subdir,listNm) n dev,idx,mode
+    s mode=$v("proc",5,0)
+    s dev="|PIPE|dir /b "_subdir
+    o dev:("rwt")
+    u dev
+    f  q:$zeof  r @listNm@($i(idx))
+    u $p
+    c dev
+    s mode=$v("proc",5,mode)
+    q
+    ;
+    ; load Pearl of Great Price into database
+    ;
+pogp n fnm,quit,line,book,ch,vs,wrapped,dev,flist,mode
+    ;s fnm="/home/james/Documents/scriptures/texts/scr-pogp.txt"
+    s mode=$v("proc",5,0)
+    s dir="C:\Users\james\Documents\scriptures\POGPtexts"
+    d getDirList(dir,"flist")
+    s fnm=""
+    f  s fnm=$o(flist(fnm)) q:fnm=""  d
+    . i flist(fnm)="" q
+    . w flist(fnm),!
+    . s dev="|FILE|"_dir_"\"_flist(fnm)
+    . o dev:("rt")
+    . s quit=0
+    . f  u dev r line q:$zeof  d  q:quit
+    . . s line=$tr(line,$c(13),"")
+    . . i line="" q
+    . . s book=$p(line," ")
+    . . s ch=$p($p(line," ",2),":")
+    . . s vs=$p($p(line," ",2),":",2)
+    . . i book="AOF" s vs=ch,ch=1
+    . . s line=$p(line," ",3,$l(line," "))
+    . . ;d wordWrap(line)
+    . . ;m ^script("pogp",book,ch,vs)=wrapped
+    . . s ^script("pogp",book,ch,vs)=line
+    . c dev
+    s mode=$v("proc",5,mode)
+    q
+    ;
+    ; load Doctrine and Covenants into database
+    ;
+dac n fnm,quit,line,book,ch,vs,wrapped,flist,dir,mode
+    ;s fnm="/home/james/Documents/scriptures/texts/scr-dac.txt"
+    s mode=$v("proc",5,0)
+    s dir="C:\Users\james\Documents\scriptures\DCtexts"
+    d getDirList(dir,"flist")
+    s fnm=""
+    f  s fnm=$o(flist(fnm)) q:fnm=""  d
+    . i flist(fnm)="" q
+    . w flist(fnm),!
+    . s dev="|FILE|"_dir_"\"_flist(fnm)
+    . o dev:("rt")
+    . s quit=0
+    . f  u dev r line q:$zeof  d  q:quit
+    . . s line=$tr(line,$c(13),"")
+    . . i line="" q
+    . . s book=$p(line," ")
+    . . s ch=$p($p(line," ",2),":")
+    . . s vs=$p($p(line," ",2),":",2)
+    . . s line=$p(line," ",3,$l(line," "))
+    . . ;d wordWrap(line)
+    . . ;m ^script("dac",book,ch,vs)=wrapped
+    . . s ^script("dac",book,ch,vs)=line
+    . c dev
+    s mode=$v("proc",5,mode)
+    q
+    ;
+    ; load Book of Mormon into database
+    ;
+bom n fnm,quit,line,book,ch,vs,wrapped,flist,dev,dir
+    ;s fnm="/home/james/Documents/scriptures/texts/scr-bom.txt"
+    s mode=$v("proc",5,0)
+    s dir="C:\Users\james\Documents\scriptures\BOMtexts"
+    d getDirList(dir,"flist")
+    s fnm=""
+    f  s fnm=$o(flist(fnm)) q:fnm=""  d
+    . i flist(fnm)="" q
+    . w flist(fnm),!
+    . s dev="|FILE|"_dir_"\"_flist(fnm)
+    . o dev:("rt")
+    . s quit=0
+    . f  u dev r line q:$zeof  d  q:quit
+    . . s line=$tr(line,$c(13),"")
+    . . i line="" q
+    . . i $p(line," ",2)'[":" q  ;skip book titles
+    . . s book=$p(line," ")
+    . . s ch=$p($p(line," ",2),":")
+    . . s vs=$p($p(line," ",2),":",2)
+    . . s line=$p(line," ",3,$l(line," "))
+    . . ;d wordWrap(line)
+    . . ;m ^script("bom",book,ch,vs)=wrapped
+    . . s ^script("bom",book,ch,vs)=line
+    . c dev
+    s mode=$v("proc",5,mode)
+    q
+    ;
+    ; load the Bible into the database
+    ;
+bibleV1 n fnm,line,book,ch,vs,inVs,chvs,lnCnt,oldVs,oldCh
+    s fnm="/home/james/Documents/scriptures/texts/scr-bible-kjv.txt"
+    o fnm:(readonly)
+    s quit=0,inVs=0,lnCnt=0,oldCh=0,oldVs=0
+    f  u fnm r line q:$zeof  d  q:quit
+    . u $p
+    . s line=$tr(line,$c(13),"")
+    . ; blank lines indicate the end of a verse
+    . i line="" s inVs=0 q
+    . s chvs=$p(line," ")
+    . i chvs?1.N1":"1.N d
+    . . ;this is the start of a verse
+    . . s inVs=1
+    . . s ch=$p(chvs,":")
+    . . i ch'=oldCh d ;changed chapter, restart verse count
+    . . . s oldVs=0
+    . . . s oldCh=ch
+    . . s vs=$p(chvs,":",2)
+    . . i oldVs'=(vs-1) d
+    . . . w "Missed a verse! ",book," ",ch,":",oldVs,"->",vs,!
+    . . . h
+    . . s line=$p(line," ",2,100)
+    . . s oldVs=vs
+    . . s lnCnt=0
+    . i 'inVs d
+    . . i chvs'[":" d
+    . . . ;this is not the beginning of a verse
+    . . . ;determine if it is the beginning of a book
+    . . . w !,line,!
+    . . . s book=$g(^tmp(line))
+    . . . i book'="" q  ;we've already seen this one
+    . . . w "Is this a new book? " r ans w !
+    . . . i "Nn"[ans q
+    . . . w "What code do you want to use? " r ans w !
+    . . . s book=$$FUNC^%UCASE(ans)
+    . . . w "Set book = ",book,!
+    . . . s ^script("bible",book,0,0,1)=line
+    . . . s ^tmp(line)=book
+    . . . s oldVs=0
+    . . . s oldCh=0
+    . i inVs d
+    . . ; we're in a verse add the line.
+    . . s lnCnt=lnCnt+1
+    . . s ^script("bible",book,ch,vs,lnCnt)=line
+    q
+    ;
+    ; load the Bible into the database
+    ;
+bible n fnm,line,book,ch,vs,inCh,lnCnt,inPref,inSkip,inPsalm
+    s fnm="/home/james/Documents/scriptures/texts/AV1611Bible.txt"
+    o fnm:(readonly)
+    s inPref=0,inSkip=0,inCh=0,inPsalm=0
+    s quit=0,lnCnt=0
+    f  u fnm r line q:$zeof  d  q:quit
+    . u $p
+    . s line=$tr(line,$c(13),"")
+    . i line="<preface>" d  q
+    . . s inPref=1
+    . . s book="PRE"
+    . . s ch=1
+    . . s vs=1
+    . . s lnCnt=0
+    . i line="</preface>" s inPref=0 q
+    . i line="<skip>" s inSkip=1 q
+    . i line="</skip>" s inSkip=0 q
+    . ;
+    . i inSkip q
+    . ;check for end of chapter
+    . i inCh,line="" s inCh=0
+    . i line="" q
+    . ;
+    . i inPref d
+    . . s ch=ch+1
+    . ;
+    . i 'inCh,$e(line,1,7)="CHAPTER" d  q
+    . . ; start of a chapter
+    . . s ch=$p(line," ",2)
+    . . s inCh=1
+    . . s inPsalm=0
+    . ;
+    . i 'inCh,$e(line,1,5)="PSALM" d  q
+    . . s ch=$p(line," ",2)
+    . . s vs=0
+    . . s inCh=1
+    . . s inPsalm=1
+    . ;
+    . i 'inCh,'inPref d  q
+    . . ; probably the start of a book
+    . . w !,line,!
+    . . s book=$g(^tmp(line))
+    . . i book'="" q  ;we've already seen this one
+    . . w "Is this a new book? " r ans w !
+    . . i "Nn"[ans q
+    . . w "What code do you want to use? " r ans w !
+    . . s book=$$FUNC^%UCASE(ans)
+    . . w "Set book = ",book,!
+    . . s ^script("bible",book,0,0,1)=line
+    . . s ^tmp(line)=book
+    . . s ch=0
+    . ;
+    . i 'inPref d
+    . . s vs=$p(line," ")
+    . . i vs'?1.N s vs=0 q
+    . . s line=$p(line," ",2,$l(line," "))
+    . ;
+    . d wordWrap(line)
+    . m ^script("bible",book,ch,vs)=wrapped
+    q
+    ;
+    ; New testament import - each verse starts with $c(31)
+    ;
+nt  n mode,dir,fnm,dev,line,book,ch,vs,line
+    s mode=$v("proc",5,0)
+    s dir="C:\Users\james\Documents\scriptures\NTtexts"
+    d getDirList(dir,"flist")
+    s fnm=""
+    f  s fnm=$o(flist(fnm)) q:fnm=""  d
+    . i flist(fnm)="" q
+    . w flist(fnm),!
+    . s dev="|FILE|"_dir_"\"_flist(fnm)
+    . o dev:("rt")
+    . s quit=0
+    . f  u dev r line q:$zeof  d  q:quit
+    . . s line=$tr(line,$c(13),"")
+    . . i line="" q
+    . . i $e(line)=$c(26) q
+    . . i $e(line)=$c(31) d
+    . . . s book=$p($p(line," "),$c(31),2)
+    . . . s ch=$p($p(line," ",2),":")
+    . . . s vs=$p($p(line," ",2),":",2)
+    . . . s line=$p(line," ",4,$l(line," "))
+    . . ;d wordWrap(line)
+    . . ;m ^script("bom",book,ch,vs)=wrapped
+    . . s ^script("nt",book,ch,vs)=$g(^script("nt",book,ch,vs))_line
+    . c dev
+    s mode=$v("proc",5,mode)
+    q
+    ;
+    ; old testament - verse starts with $c(31)
+    ;
+ot  n mode,dir,fnm,dev,line,book,ch,vs,line
+    s mode=$v("proc",5,0)
+    s dir="C:\Users\james\Documents\scriptures\OTtexts"
+    d getDirList(dir,"flist")
+    s fnm=""
+    f  s fnm=$o(flist(fnm)) q:fnm=""  d
+    . i flist(fnm)="" q
+    . w flist(fnm),!
+    . s dev="|FILE|"_dir_"\"_flist(fnm)
+    . o dev:("rt")
+    . s quit=0
+    . f  u dev r line q:$zeof  d  q:quit
+    . . s line=$tr(line,$c(13),"")
+    . . i line="" q
+    . . i $e(line)=$c(26) q
+    . . i $e(line)=$c(31) d
+    . . . s book=$p($p(line," "),$c(31),2)
+    . . . s ch=$p($p(line," ",2),":")
+    . . . s vs=$p($p(line," ",2),":",2)
+    . . . s line=$p(line," ",4,$l(line," "))
+    . . ;d wordWrap(line)
+    . . ;m ^script("bom",book,ch,vs)=wrapped
+    . . s ^script("ot",book,ch,vs)=$g(^script("ot",book,ch,vs))_line
+    . c dev
+    s mode=$v("proc",5,mode)
+    q
+    ;
+    ; load book abbreviations
+    ;
+abbr n fnm,quit,line,abbr,name
+    s fnm="|FILE|C:\Users\james\Documents\scriptures\bookAbbr.txt"
+    o fnm
+    s quit=0
+    f  u fnm r line q:$zeof  d  q:quit
+    . s name=$p(line," ")
+    . s abbr=$e(line,47,49)
+    . s ^abbr(abbr)=name
+    c fnm
+    q
+    ;
+    ; Create inverted index based on ngrams
+    ;
+ngIndex n comp,book,ch,vs,gram,vector,wvector,psg
+    d init^ngrams
+    k ^scrIdx
+    s comp=""
+    f  s comp=$o(^script(comp)) q:comp=""  d
+    . s book=""
+    . f  s book=$o(^script(comp,book)) q:book=""  d
+    . . w book,!
+    . . s ch=""
+    . . f  s ch=$o(^script(comp,book,ch)) q:ch=""  d
+    . . . s vs=""
+    . . . f  s vs=$o(^script(comp,book,ch,vs)) q:vs=""  d
+    . . . . m psg=^script(comp,book,ch,vs)
+    . . . . d vector^ngrams("psg")
+    . . . . s gram=""
+    . . . . f  s gram=$o(wvector(gram)) q:gram=""  d
+    . . . . . s docId=comp_"|"_book_"|"_ch_"|"_vs
+    . . . . . s ^scrIdx(gram,docId)=""
+    q
+    ;
+    ; Create inverted index based on stemmed words
+    ;
+wIndex n comp,book,ch,vs,ln,w,word,docId,line,pos
+    d init^ngrams
+    k ^scrWIdx
+    s comp=""
+    f  s comp=$o(^script(comp)) q:comp=""  d
+    . s book=""
+    . f  s book=$o(^script(comp,book)) q:book=""  d
+    . . w book,!
+    . . s ch=""
+    . . f  s ch=$o(^script(comp,book,ch)) q:ch=""  d
+    . . . s vs=""
+    . . . f  s vs=$o(^script(comp,book,ch,vs)) q:vs=""  d
+    . . . . s docId=comp_"|"_book_"|"_ch_"|"_vs
+    . . . . s line=^script(comp,book,ch,vs)
+    . . . . ; replace "--" with single space
+    . . . . f  s pos=$f(line,"--") q:pos=0  d
+    . . . . . s line=$e(line,1,pos-3)_" "_$e(line,pos,$l(line))
+    . . . . s line=$tr(line,nullfm,nullto)
+    . . . . f w=1:1:$l(line) d
+    . . . . . s word=$p(line," ",w)
+    . . . . . i word="" q
+    . . . . . s word=$zlcase(word)
+    . . . . . i $d(^stopWord(word)) q
+    . . . . . s word=$$stem^ngrams(word)
+    . . . . . s ^scrWIdx(word,docId)=""
+    q
+    ;
+    ; find matching entries
+    ;
+find(array) n vector,wvector,gram,doc,srchVec,psg,sim
+    d init^ngrams
+    k ^temp($j)
+    d vector^ngrams(array)
+    ; find all possible documents
+    s gram=""
+    f  s gram=$o(wvector(gram)) q:gram=""  d
+    . s doc=""
+    . f  s doc=$o(^scrIdx(gram,doc)) q:doc=""  d
+    . . s ^temp($j,doc)=""
+    ; compare vectors of documents with phrase vector
+    m srchVec=wvector
+    s doc=""
+    f  s doc=$o(^temp($j,doc)) q:doc=""  d
+    . m psg=^script($p(doc,"|"),$p(doc,"|",2),$p(doc,"|",3),$p(doc,"|",4))
+    . d vector^ngrams("psg")
+    . s sim=$$sim^ngrams("srchVec","wvector")
+    . i $p(sim,",",2)>0.8 w doc," = ",sim,!
+    k ^temp($j)
+    q
+    ;
+    ; search for string
+    ;
+findStr(str,refs) n comp,book,ch,vs,line,fnd,stctxt,endctxt,cntxt,refCnt
+    s comp="",cntxt="",refCnt=0
+    f  s comp=$o(^script(comp)) q:comp=""  d
+    . w comp,!
+    . s book=""
+    . f  s book=$o(^script(comp,book)) q:book=""  d
+    . . s ch=""
+    . . f  s ch=$o(^script(comp,book,ch)) q:ch=""  d
+    . . . s vs=""
+    . . . f  s vs=$o(^script(comp,book,ch,vs)) q:vs=""  d
+    . . . . s line=^script(comp,book,ch,vs)
+    . . . . s fnd=$$scan(line,str)
+    . . . . i fnd d  q
+    . . . . . s stctxt=fnd-$l(str)-20
+    . . . . . s endctxt=fnd+20
+    . . . . . s cntxt=$e(line,stctxt,endctxt)
+    . . . . . s refCnt=refCnt+1
+    . . . . . s @refs@(refCnt)=comp_"|"_book_"|"_ch_"|"_vs_"|"_cntxt
+    q
+    ;
+    ; scan a line for a string
+    ;
+scan(line,str) n nullfm,nullto
+    s nullfm="0123456789&$*#/,:;().""[]-!?=`'"_$c(9,13,31,26)
+    s nullto="                     "
+    s line=$tr(line,nullfm,nullto)
+    s line=$zlcase(line)
+    s fnd=$f(line,str)
+    q fnd
+    
+

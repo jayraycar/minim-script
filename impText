@@ -1,0 +1,39 @@
+ ; ~Format=ANSI.S~
+%RO Version Control
+impText
+impText(file) ;import words from ascii text
+    ; 17 August 2010
+    ;
+    n fnm,ln,line,text
+    s fnm="c:\Documents and Settings\James\My Documents\jrcData\nltk\corpora\"_file
+    s dev="|FILE|"_fnm
+    o dev:("R")
+    s $et="g eof^impText"
+    s ln=0
+    f  u dev r line d
+    . s ln=ln+1
+    . s text(ln)=line
+eof s $et=""
+    c dev
+    u $p
+    ;
+    d textWordExtr^libW("text")
+    k ^jrc
+    m ^jrc=wordsFnd
+    k wordsFnd,text
+    q
+    ;
+    ; Merge ^jrc words into ^words
+    ;
+merge s w="",nCnt=0,wCnt=0,total=0
+    f  s w=$o(^jrc(w)) q:w=""  d
+    . s total=total+1
+    . i $e(w)?1U d
+    . . i '$d(^nounProp(w)) s nCnt=nCnt+1,^nounProp(w)=""
+    . e  i '$d(^word(w)) s wCnt=wCnt+1,^word(w)=""
+    w "Total = ",total,!
+    w "New proper nouns = ",nCnt,!
+    w "New words = ",wCnt,!
+    q
+ 
+

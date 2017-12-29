@@ -1,0 +1,206 @@
+ ; ~Format=ANSI.S~
+%RO Version Control
+impWordNet
+impWordNet ; Import the Wordnet database
+    ;13/8/2010
+    ;
+    ; index file format
+    ; lemma pos synset_cnt p_cnt [ptr_symbol...] sense_cnt tagsense_cnt synset_offset [synset_offset...]
+    ; ^wnIdx(word,part_of_speech)=ptrSymbol_"|"_tagsenseCnt_"|"_synSetList
+    ;
+    ; data file format
+    ; synset_offset lex_filenum ss_type w_cnt word lex_id [word  lex_id...] p_cnt [ptr...] [frames...] | gloss
+    ; ^wnDat(synOffs,ssType,0,i)=word_"|"_lexId
+    ; ^wnDat(synOffs,ssType,1,i)=pSym_"|"_pSynOffs_"|"_pPos_"|"_srcTgt
+    ; ^wnDat(synOffs,ssType,2,i)=Description
+    ;
+init
+    s s1="|"
+    s $ecode=""
+    s %lower="abcdefghijklmnopqrstuvwxyz"
+    s %upper="ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    s dir="c:\minimdat\dict\"
+    q
+    ;
+    ; import data.* files
+    ;
+data
+    d init
+    s file(1)="data.adj"
+    s file(2)="data.adv"
+    s file(3)="data.noun"
+    s file(4)="data.verb"
+    f fnum=1:1:4 d 
+    . d readFile(fnum)
+    q
+    ;
+    ; import data from data.* file
+    ; synset_offset lex_filenum ss_type w_cnt word lex_id [word  lex_id...] p_cnt [ptr...] [frames...] | gloss
+    ;
+readFile(fnum)
+    s mode=$v("proc",5,0)
+    w file(fnum),!
+    s dev="|FILE|"_dir_file(fnum)
+    o dev:("rt")
+    s lnCnt=0
+    f  u dev r line q:$zeof  d
+    . i $e(line,1,2)="  " q
+    . s lnCnt=lnCnt+1
+    . ;i lnCnt#1000=0 u $p w lnCnt,!
+    . s fld=1
+    . s synOffs=$p(line," ",fld),fld=fld+1
+    . i synOffs="" q
+    . s synOffs=fnum_"-"_synOffs
+    . s lexFnum=$p(line," ",fld),fld=fld+1
+    . s ssType=$p(line," ",fld),fld=fld+1
+    . s wCnt=$p(line," ",fld),fld=fld+1
+    . f i=1:1:wCnt d
+    . . s word=$p(line," ",fld),fld=fld+1
+    . . s lexId=$p(line," ",fld),fld=fld+1
+    . . ;s xrefWord=$tr(word,%upper,%lower)
+    . . ;s ^wnxref(xrefWord,lexFnum,synOffs)=""
+    . . s ^wnDat(synOffs,ssType,0,i)=word_s1_lexId
+    . s pCnt=+$p(line," ",fld),fld=fld+1
+    . f i=1:1:pCnt d
+    . . s pSym=+$p(line," ",fld),fld=fld+1
+    . . s pSynOffs=fnum_"-"_$p(line," ",fld),fld=fld+1
+    . . s pPos=$p(line," ",fld),fld=fld+1
+    . . s srcTgt=$p(line," ",fld),fld=fld+1
+    . . s ^wnDat(synOffs,ssType,1,i)=pSym_s1_pSynOffs_s1_pPos_s1_srcTgt
+    . s defn=$p(line,"|",2)
+    . s ^wnDat(synOffs,ssType,2,1)=$tr($p(defn,";"),"`","'")
+    . f i=2:1 s sent=$p(defn,";",i) q:sent=""  d
+    . . s ^wnDat(synOffs,ssType,2,i)=$tr(sent,"""","")
+    c dev
+    s mode=$v("proc",5,mode)
+    u $p
+    q
+    ;
+    ; import index.* files
+    ;
+index
+    d init
+    k ^wnIdx
+    s file(1)="index.adj"
+    s file(2)="index.adv"
+    s file(3)="index.noun"
+    s file(4)="index.verb"
+    f fnum=1:1:4 d
+    . d impIdx(fnum)
+    q
+    ;
+    ; import the data from an index.* file
+    ; lemma pos synset_cnt p_cnt [ptr_symbol...] sense_cnt tagsense_cnt synset_offset [synset_offset...]
+    ;
+impIdx(fnum)
+    s mode=$v("proc",5,0)
+    s dev="|FILE|"_dir_file(fnum)
+    w dev,!
+    o dev
+    f  u dev r line q:$zeof  d
+    . ; skip header info
+    . i $e(line,1,2)="  " q
+    . ; process data
+    . s lemma=$p(line," ",1)
+    . s pos=$p(line," ",2)
+    . s synsetCnt=$p(line," ",3)
+    . s pcnt=$p(line," ",4)
+    . s ptrSymbol=""
+    . i pcnt'=0 d
+    . . s ptrSymbol=$p(line," ",5,4+pcnt)
+    . s fld=6+pcnt
+    . s tagsenseCnt=$p(line," ",fld)
+    . s fld=fld+1
+    . s synsetOffset=$p(line," ",fld,fld+synsetCnt)
+    . i synsetOffset="" q
+    . s synSetList=""
+    . f i=1:1:synsetCnt d
+    . . s offset=$p(synsetOffset," ",i)
+    . . i synSetList'="" s synSetList=synSetList_" "
+    . . s synSetList=synSetList_fnum_"-"_offset
+    . s ^wnIdx(lemma,pos)=ptrSymbol_s1_tagsenseCnt_s1_synSetList
+    c dev
+    s mode=$v("proc",5,mode)
+    q
+    ;
+    ;
+    ;
+fmap s fmap("0")="adj.all"
+    s fmap("1")="adj.pert"
+    s fmap("2")="adv.all"
+    s fmap("3")="noun.Tops"
+    s fmap("4")="noun.act"
+    s fmap("5")="noun.animal"
+    s fmap("6")="noun.artifact"
+    s fmap("7")="noun.attribute"
+    s fmap("8")="noun.body"
+    s fmap("9")="noun.cognition"
+    s fmap("10")="noun.communication"
+    s fmap("11")="noun.event"
+    s fmap("12")="noun.feeling"
+    s fmap("13")="noun.food"
+    s fmap("14")="noun.group"
+    s fmap("15")="noun.location"
+    s fmap("16")="noun.motive"
+    s fmap("17")="noun.object"
+    s fmap("18")="noun.person"
+    s fmap("19")="noun.phenomenon"
+    s fmap("20")="noun.plant"
+    s fmap("21")="noun.possession"
+    s fmap("22")="noun.process"
+    s fmap("23")="noun.quantity"
+    s fmap("24")="noun.relation"
+    s fmap("25")="noun.shape"
+    s fmap("26")="noun.state"
+    s fmap("27")="noun.substance"
+    s fmap("28")="noun.time"
+    s fmap("29")="verb.body"
+    s fmap("30")="verb.change"
+    s fmap("31")="verb.cognition"
+    s fmap("32")="verb.communication"
+    s fmap("33")="verb.competition"
+    s fmap("34")="verb.consumption"
+    s fmap("35")="verb.contact"
+    s fmap("36")="verb.creation"
+    s fmap("37")="verb.emotion"
+    s fmap("38")="verb.motion"
+    s fmap("39")="verb.perception"
+    s fmap("40")="verb.possession"
+    s fmap("41")="verb.social"
+    s fmap("42")="verb.stative"
+    s fmap("43")="verb.weather"
+    s fmap("44")="adj.ppl"
+    q
+    ;
+    ; sort letters in a word alphabetically
+    ;
+sort(word) n i,len,temp,fin,swapped
+    s len=$l(word)
+    i len=0 q ""
+    s fin=0
+    f  d  q:fin
+    . s swapped=0
+    . f i=1:1:len-1 d
+    . . i $e(word,i)]$e(word,i+1) d
+    . . . s temp=$e(word,i)
+    . . . s $e(word,i)=$e(word,i+1)
+    . . . s $e(word,i+1)=temp
+    . . . s swapped=1
+    . i 'swapped s fin=1
+    q word
+    ;
+    ; create letter sorted index
+    ;
+lsort s w=""
+    f  s w=$o(^xref(w)) q:w=""  d
+    . s sorted=$$sort(w)
+    . s ^lsort(sorted,w)=""
+    q
+    ;
+    ; find sorted
+    ; 
+fsort(w) s sorted=$$sort(w)
+    s w=""
+    f  s w=$o(^lsort(sorted,w)) q:w=""  w w,!
+    q
+

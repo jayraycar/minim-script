@@ -1,0 +1,17 @@
+ ; ~Format=ANSI.S~
+%RO Version Control
+dir
+dir(subdir) ; display file system directory listing
+    n zeof=$v("proc",5,0)
+    n dev="|PIPE|dir "_subdir
+    o dev:("rwt")
+    n result
+    u dev f  q:$zeof  r result($i(result))
+    u $p
+    c dev
+    i $v("proc",5,zeof)
+    s idx=""
+    f  s idx=$o(result(idx)) q:idx=""  d
+    . w result(idx),!
+    q
+

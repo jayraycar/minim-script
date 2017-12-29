@@ -1,0 +1,176 @@
+ ; ~Format=ANSI.S~
+%RO Version Control
+gsrch
+gsrch ; Search global keys and display one or more pieces
+    ; James Carthew 11/6/2016
+    ;
+    ; main loop
+    n numSubs,ok
+    w "Global searcher",!
+    w "Global: ^"
+    r query w !
+    i query="" q
+    d parseQuery
+    d parsePieces
+    i 'ok w "Unable to parse the query",! q
+    d search
+    q
+    ;
+    ; parse the query definition entered
+    ;
+    ; query structure:
+    ; ^glbl(key1,key2,...)=piece1,piece2,...
+    ; key1, etc can be
+    ;    unquoted string
+    ;    number
+    ;    * for wild card
+    ;    xxx-yyy for a range
+    ;
+    ; piece format:
+    ;   Sn[:value]
+    ;
+parseQuery n subs,sub,sub1,sub2,subnum
+    s ok=1
+    s glbl=$p($p(query,"=",1),"(",1)
+    i $e(glbl)'="^" s glbl="^"_glbl
+    s subs=$p($p(query,"(",2),")",1)
+    ; check glbl
+    i glbl="" s ok=0
+    i '$d(glbl) d
+    . w "Global ",glbl," does not exist",!
+    . s ok=0
+    ; interpret subscripts
+    k sublim
+    s numSubs=$l(subs,",")
+    f subnum=1:1:numSubs d
+    . s sub=$p(subs,",",subnum)
+    . i sub="*" s sub=""
+    . i $f(sub,"-") d ;range specifier
+    . . s sub1=$$stripQuotes($p(sub,"-",1))
+    . . s sub2=$$stripQuotes($p(sub,"-",2))
+    . . s sub=sub1_"-"_sub2
+    . e  d
+    . . s sublim(subnum)=$$stripQuotes(sub)
+    ;
+    q
+    ;
+    ; Parse the pieces
+    ;
+parsePieces n numPieces,p,piece
+    s pieces=$p(query,"=",2)
+    i pieces="" q
+    s numPieces=$l(pieces,",")
+    f p=1:1:numPieces d
+    . s piece=$p(pieces,",",p)
+    . s pieces(p,"sep")=$e(piece)
+    . s pieces(p,"cnt")=$e($p(piece,":",1),2,$l(piece))
+    . s pieces(p,"val")=$p(piece,":",2)
+    q
+    ;
+    ; check if variable contains a string
+    ; anything other than an integer is a string in this context
+    ;
+isString(str)
+    q '(str?1.N)
+    ;
+    ; check if string is surrounded by quotes
+    ;
+isQuoted(str)
+    q ($e(str)="""")&($e(str,$l(str))="""")
+    ;
+    ; strip leading and trailing quotes
+stripQuotes(str) n start,end
+    s start=1
+    i $e(str)="""" s start=2
+    s end=$l(str)
+    i $e(str,end)="""" s end=end-1
+    q $e(str,start,end)
+    ;
+    ; do the search
+    ; expects numSubs to be already set
+    ;
+search n quit,sub,subs,inRange,ans,checkFin,key,lnCnt
+    n nextNumSubs,sn,subcnt,p,disp,tempKey
+    ; create initial key
+    s key=glbl_"("
+    f sn=1:1:numSubs d
+    . i sn>1 s key=key_","
+    . i sublim(sn)="" d
+    . . i $e(key,$l(key))'="(" d
+    . . . s tempKey=key_")"
+    . . e  d
+    . . . s tempKey=glbl
+    . . s sub=$o(@tempKey@(""))
+    . . s key=key_""""_sub_""""
+    . e  i $f(sublim(sn),"-") d
+    . . s key=key_""""_$p(sublim(sn),"-",1)_""""
+    . e  d
+    . . s key=key_""""_sublim(sn)_""""
+    s key=key_")"
+    ;
+    ; do the search
+    s quit=0
+    s lnCnt=0
+    s nextKey=""
+    ; ensure that a match on the first key is included in the
+    ; output
+    s nextKey=""
+    f  d  q:quit
+    . i nextKey="",($d(@key)#10)=1 d
+    . . s nextKey=key
+    . e  d
+    . . s nextKey=$q(@key)
+    . i nextKey="" s quit=1 q ; end of search reached
+    . ; check each subscript for search criteria
+    . s subs=$p($p(nextKey,"(",2),")",1)
+    . s nextNumSubs=$l(subs,",")
+    . ; check if there is large enough number of subscripts
+    . i nextNumSubs<numSubs s key=nextKey q  ; too short, don't display
+    . ; check if all subscripts are in range
+    . s inRange=0 ; [-1|0|1]
+    . s checkFin=0
+    . f subcnt=1:1:numSubs d  q:checkFin
+    . . ; wild card subscript
+    . . i sublim(subcnt)="" q
+    . . s sub=$$stripQuotes($p(subs,",",subcnt))
+    . . i sublim(subcnt)["-" d
+    . . . ; range limit on subscript
+    . . . s stSub=$p(sublim(subcnt),"-",1)
+    . . . s endSub=$p(sublim(subcnt),"-",2)
+    . . . i sub']stSub s inRange=-1
+    . . . i sub=stSub s inRange=0
+    . . . i sub]endSub s inRange=1
+    . . e  d
+    . . . ; absolute value check
+    . . . i sub']sublim(subcnt) s inRange=-1
+    . . . i sub=sublim(subcnt) s inRange=0
+    . . . i sub]sublim(subcnt) s inRange=1
+    . . i inRange'=0 s checkFin=1 q
+    . ; check if nextKey is to be displayed
+    . i inRange=1 s quit=1 q ; end of search reached
+    . ; check pieces for displayability and what to display
+    . s p="",disp=""
+    . f  s p=$o(pieces(p)) q:p=""  d
+    . . s sep=$g(pieces(p,"sep"))
+    . . s cnt=$g(pieces(p,"cnt"))
+    . . s val=$g(pieces(p,"val"))
+    . . i val'="",$p(@nextKey,sep,cnt)'=val d
+    . . . ; piece value has been defined and doesn't match, don't display
+    . . . s inRange=-1
+    . . s disp=disp_$p(@nextKey,sep,cnt)_sep
+    . i inRange=-1 s key=nextKey q ; keep searching, don't display
+    . i pieces="" s disp=@nextKey
+    . ; inRange must be 0, display
+    . w nextKey,!
+    . w disp,!
+    . s lnCnt=lnCnt+2
+    . i lnCnt>23 d  q:quit
+    . . w "<RETURN | *>"
+    . . r ans
+    . . i ans="*" s quit=1 q
+    . . s lnCnt=0
+    . . w !
+    . s key=nextKey
+    q
+ 
+
